@@ -613,10 +613,10 @@ static const __inline__  __attribute__((always_inline)) uint8_t o_find(const Web
 #define o_next(obj) ((obj)->__next__)
 
 #define o_getemptypos(v)						\
-  ((((v) - 0x101010101010101ull) | ((v) - 0x1010101010101010ull)) & (~(v) & 0x8888888888888888ull))
+  ((((v) - 0x1000100010001ull) | ((v) - 0x100010001000100ull)) & (~(v) & 0x8080808080808080ull))
 
 #define o_emptytest(v)							\
-  (bool)(((v) - 0x1111111111111111ull) & (~(v) & 0x8888888888888888ull))
+  (bool)(((v) - 0x10101010101010101ull) & (~(v) & 0x8080808080808080ull))
 
 #define o_setid(bf, idx, id)
 #define o_unsetid(bf, idx)
