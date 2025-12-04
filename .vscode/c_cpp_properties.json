@@ -1,0 +1,40 @@
+{
+    "configurations": [
+        {
+            "name": "Linux config",
+            "includePath": [
+                "/workspaces/Webdriver/**",
+                "/usr/include"
+            ],
+            "defines": [],
+            "compilerPath": "/usr/bin/clang",
+            "cStandard": "c17",
+            "cppStandard": "c++17",
+            "browse": {
+                "path": [
+                    "/usr/include"
+                ],
+                "limitSymbolsToIncludedHeaders": true
+            },
+            "compilerPathInCppPropertiesJson": "/usr/bin/gcc-13",
+            "mergeConfigurations": false,
+            "recursiveIncludes": {
+                "reduce": "never",
+                "priority": "afterSystemIncludes",
+                "order": "breadthFirst"
+            }
+        },
+        {
+            "name": "config",
+            "includePath": [
+                "${workspaceFolder}/**"
+            ],
+            "defines": [],
+            "compilerPath": "/usr/bin/clang",
+            "cStandard": "c17",
+            "cppStandard": "c++17",
+            "intelliSenseMode": "linux-clang-x64"
+        }
+    ],
+    "version": 4
+}
