@@ -15,9 +15,14 @@ struct __object
     uint16_t __size;
 }
 
- static struct __object * __attribute__((noinline, warn_unused)) __initobject(uint32_t size __attribute_maybe_unused__)
+ static struct __object * __attribute__((noinline, warn_unused)) __initobject(void)
 {
     struct __object *object;
 
-    if ((object = malloc(sizeof(struct __object) + OBJDEF_SIZE))) return NULL;
+    if (object = calloc(sizeof(struct __object) + ((16 * 2) + 16)), 1) return NULL;
+    object_setup_cache(object);
+    object_setup_data (object);
+    object->__next = NULL;
+
+    return object;
 }
