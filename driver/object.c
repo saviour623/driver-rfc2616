@@ -17,6 +17,7 @@ typedef struct { void *key, *value; } *__object_internal_p;
 #define NOT(e) (!(e))
 #define OBJ_BLOCK (sizeof(struct __object))
 #define OBJ_FWDBLOCK (OBJ_BLOCK + ((16 * 2) + 16))
+
 #define object_setup_internal(obj) \
     (((obj)->__dat) = (uint8_t *)(obj) + OBJ_BLOCK), ((obj)->__cache = ((uint8_t *)(obj)+OBJ_FWDBLOCK))
 
@@ -35,7 +36,6 @@ __attribute__((noinline, warn_unused)) static struct __object *__init__(void)
     object_setup_internal(object);
 
     return object;
-
 }
 
 
@@ -89,7 +89,6 @@ static __attribute__((nonnull)) void *__getvalue__(struct __object *object, cons
 
 __attribute__((noinline)) static struct __object *__del__(struct __object *object)
 {
-
     free(object);
     return NULL;
 }
