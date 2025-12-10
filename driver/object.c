@@ -6,25 +6,34 @@
 struct __object
 {
     uint64_t __meta[4];
-    void    *__dat;
-    void    *__cache;
-    struct   __object *__np;
+    void *__dat;
+    void *__cache;
+    struct __object *__np;
     uint16_t __size;
 };
 
-typedef struct { void *key, *value; } *__object_internal_p;
+typedef struct
+{
+    void *key, *value;
+} *__object_internal_p;
 
 #define NOT(e) (!(e))
+#define OBJ_NULL 0xff
 #define OBJ_BLOCK (sizeof(struct __object))
 #define OBJ_FWDBLOCK (OBJ_BLOCK + ((16 * 2) + 16))
+#define __objc_setup_internal__(obj) \
+    (((obj)->__dat) = (uint8_t *)(obj)+OBJ_BLOCK), ((obj)->__cache = ((uint8_t *)(obj)+OBJ_FWDBLOCK))
 
-#define object_setup_internal(obj) \
-    (((obj)->__dat) = (uint8_t *)(obj) + OBJ_BLOCK), ((obj)->__cache = ((uint8_t *)(obj)+OBJ_FWDBLOCK))
+#define __meta__(objc)  ((objc)->__meta)
+#define __cache__(objc) ((objc)->__cache)
+#define __size__(objc)  ((objc)->__size)
+#define __null__(b, i)  (((b)[(i) >> 6]) & ((i) & 0x3fu))
 
-#define object_internal_get(obj, where) \
-    (((__object_internal_p)(obj))[where])
-
-
+#define __get__(objc, where)   (((__object_internal_p)(objc))[where])
+#define __value__(objc, where) (__get__(objc, where)).value
+#define __key__(objc, where)   (__get__(objc, where)).key
+#define __setcache__(objc, where)  (__cache__(objc)[where]=(((where)&0xff)^0xff)
+#define __rsetcache__(objc, where) (__cache__(objc)[where]=OBJC_NULL)
 
 __attribute__((noinline, warn_unused)) static struct __object *__init__(void)
 {
@@ -32,13 +41,11 @@ __attribute__((noinline, warn_unused)) static struct __object *__init__(void)
 
     if (NOT(object = calloc(OBJ_FWDBLOCK, sizeof(uint8_t))))
         return NULL;
-    object->__np = NULL;
-    object_setup_internal(object);
 
+    object->__np = NULL;
+    __objc_setup_internal__(object);
     return object;
 }
-
-
 
 static __inline__ __attribute__((always_inline, pure)) uint32_t __hash__(const void *key, const int len)
 {
@@ -46,24 +53,23 @@ static __inline__ __attribute__((always_inline, pure)) uint32_t __hash__(const v
     return 0;
 }
 
-
-
 static __attribute__((nonnull)) void __add__(struct __object *object, const void *__restrict key, const void *__restrict value)
-
 {
+    uint32_t where = __hash__(key, strlen(key)) & (__size__(object) - 1); // object data capacity is a maximum of 256 items
 
-    uint32_t where = __hash__(key, strlen(key)) & (object->__size - 1); // object data capacity is a maximum of 256 items
-
-    if (NOT((object->__meta)[(0xff & -(object->__size > 0xff))] & (1ull << ((where >> 1) + !!(where & 0x3f)))) && __get_unused__(&where, object->__meta, object->__size > 0xff))
+    if (NOT(__null__(__meta__(object)) && __get_unused__(&where, __meta__(object)))
     {
         // resize object
     }
 
-    object_internal_get(object, where).key   = key;
-    object_internal_get(object, where).value = value;
-    object_internal_cache(object, where);
-    object->__size += 1;
+    __key__  (object, where) = key;
+    __value__(object, where) = value;
+
+    __setcache__(object, where);
+    __meta__(object)[where] &= (1u << (where & 0x3f));
+    __size__(object) += 1;
 }
+
 
 static __attribute__((nonnull)) void __remove__(struct __object *object, const void *__restrict key)
 {
@@ -71,8 +77,7 @@ static __attribute__((nonnull)) void __remove__(struct __object *object, const v
 
     if ((where = __find__(object, key)) < 0)
         return;
-    return object_internal_rmcache(object, where);
-
+    return __rsetcache__(object, where);
 }
 
 static __attribute__((nonnull)) void *__getvalue__(struct __object *object, const void *__restrict key)
@@ -81,14 +86,19 @@ static __attribute__((nonnull)) void *__getvalue__(struct __object *object, cons
 
     if ((where = __find__(object, key)) < 0)
         return;
-
-    return object_internal_get(object, where).value;
+    return __value__(object, where);
 }
-
-
 
 __attribute__((noinline)) static struct __object *__del__(struct __object *object)
 {
     free(object);
     return NULL;
+}
+
+int main(void)
+{
+    struct __object *obj = __init__();
+    __del__(obj);
+
+    return 0;
 }
