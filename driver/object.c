@@ -27,13 +27,26 @@ typedef struct
 #define __meta__(objc)  ((objc)->__meta)
 #define __cache__(objc) ((objc)->__cache)
 #define __size__(objc)  ((objc)->__size)
-#define __null__(b, i)  (((b)[(i) >> 6]) & ((i) & 0x3fu))
+#define __null__(b, i)  NOT(((b)[(i) >> 6]) & ((i) & 0x3fu))
 
 #define __get__(objc, where)   (((__object_internal_p)(objc))[where])
 #define __value__(objc, where) (__get__(objc, where)).value
 #define __key__(objc, where)   (__get__(objc, where)).key
-#define __setcache__(objc, where)  (__cache__(objc)[where]=(((where)&0xff)^0xff)
+#define __setcache__(objc, where)  (__cache__(objc)[where]=(((where)&0xff)^0xff))
 #define __rsetcache__(objc, where) (__cache__(objc)[where]=OBJC_NULL)
+
+#define CAT(_1, _2) _1 ## _2
+#define EXPAND(...) __VA_ARGS__
+
+#define __set_HASH(arg) 
+#define __set_ALL()
+#define __set_CACHE()
+
+#define __set(op1, arg1, op2, arg2, op3, arg3, op4, arg4, ...)\
+    ((CAT(__set_, op1)(arg1),\
+    (CAT(__set_, op2)(arg2),\
+    (CAT(__set_, op3)(arg3),\
+    (CAT(__set_, op4)(arg4))
 
 __attribute__((noinline, warn_unused)) static struct __object *__init__(void)
 {
@@ -57,7 +70,7 @@ static __attribute__((nonnull)) void __add__(struct __object *object, const void
 {
     uint32_t where = __hash__(key, strlen(key)) & (__size__(object) - 1); // object data capacity is a maximum of 256 items
 
-    if (NOT(__null__(__meta__(object)) && __get_unused__(&where, __meta__(object)))
+    if (__null__(__meta__(object)) && __get_unused__(&where, __meta__(object)))
     {
         // resize object
     }
