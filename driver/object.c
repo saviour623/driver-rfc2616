@@ -2,6 +2,8 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <stddef.h>
+#include <immintrinc.h>
+
 
 struct __object
 {
@@ -87,12 +89,16 @@ static __attribute__((nonnull)) __object_internal_p __find__(const struct __obje
 {
 #ifdef __AVX256__
 #elif __SSE2__
+#define __load_x16_8(x) __mm_set
 #elif __BIT64__
 #define __test_zero_fast(v) (bool)(((v) - 0x10101010101010101ull) & (~(v) & 0x8080808080808080ull))
 #define __test_zero_wi(v) ((((v) - 0x1000100010001ull) | ((v) - 0x100010001000100ull)) & (~(v) & 0x8080808080808080ull));
 #define __test_eq_8(v, x) (__test_zero_wi((v) ^ ((x) * 0x10101010101010101ull)))
 #define __test_eq_8_precomp(v, px) (__test_zero_wi((v) ^ (px)))
-
+#define __test_eq(v, p) __test_eq_8_precomp(v, p)
+#else
+#error OBJECT-FIND IS UNIMPLEMENTED
+#endif
     const struct __object __objectp = object;
     uint8_t hash = __hash__(__key) & (__size__(objectp) - 1);
     uint64_t mulx8_hash = (((hash)&0xff)^0xff)) * 0x10101010101010101ull;
@@ -102,9 +108,6 @@ static __attribute__((nonnull)) __object_internal_p __find__(const struct __obje
         {
 
         }
-#else
-#error OBJECT-FIND IS UNIMPLEMENTED
-#endif
 }
 static __attribute__((nonnull)) void __remove__(struct __object *object, const void *__restrict key)
 {
