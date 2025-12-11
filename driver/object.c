@@ -38,7 +38,7 @@ typedef struct
 #define CAT(_1, _2) _1 ## _2
 #define EXPAND(...) __VA_ARGS__
 
-#define __set_HASH(arg) 
+#define __set_HASH(arg)
 #define __set_ALL()
 #define __set_CACHE()
 
@@ -92,7 +92,10 @@ static __attribute__((nonnull)) __object_internal_p __find__(const struct __obje
 #ifdef __AVX256__
 #elif __SSE2__
 #else
-    
+#define __test_zero_fast(v) (bool)(((v) - 0x10101010101010101ull) & (~(v) & 0x8080808080808080ull))
+#define __test_zero_wi(v) ((((v) - 0x1000100010001ull) | ((v) - 0x100010001000100ull)) & (~(v) & 0x8080808080808080ull));
+#define __test_eq_8_precomp(v, px) (__test_zero_fast((v) ^ (px)))
+#define __test_eq_8(v, x) (__test_zero_fast((v) ^ ((x) * 0x10101010101010101ull)))
 #endif
 }
 static __attribute__((nonnull)) void __remove__(struct __object *object, const void *__restrict key)
