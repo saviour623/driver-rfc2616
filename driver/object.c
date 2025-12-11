@@ -83,7 +83,10 @@ static __attribute__((nonnull)) void __add__(struct __object *object, const void
     __size__(object) += 1;
 }
 
-
+static __attribute__((nonull)) __object_internal_p __find__(const struct __object const *object, const void *__key)
+{
+    
+}
 static __attribute__((nonnull)) void __remove__(struct __object *object, const void *__restrict key)
 {
     uint32_t where;
