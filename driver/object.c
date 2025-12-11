@@ -2,8 +2,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <stddef.h>
-#include <immintrinc.h>
-
+#include <immintrin.h>
 
 struct __object
 {
@@ -45,10 +44,10 @@ typedef struct
 #define __set_CACHE()
 
 #define __set(op1, arg1, op2, arg2, op3, arg3, op4, arg4, ...)\
-    ((CAT(__set_, op1)(arg1),\
-    (CAT(__set_, op2)(arg2),\
-    (CAT(__set_, op3)(arg3),\
-    (CAT(__set_, op4)(arg4))
+    (CAT(__set_, op1)(arg1),\
+    CAT(__set_, op2)(arg2),\
+    CAT(__set_, op3)(arg3),\
+    CAT(__set_, op4)(arg4))
 
 __attribute__((noinline, warn_unused)) static struct __object *__init__(void)
 {
@@ -72,7 +71,7 @@ static __attribute__((nonnull)) void __add__(struct __object *object, const void
 {
     uint32_t where = __hash__(key, strlen(key)) & (__size__(object) - 1); // object data capacity is a maximum of 256 items
 
-    if (__null__(__meta__(object)) && __get_unused__(&where, __meta__(object)))
+    if (__null__(__meta__(object), where) && __get_unused__(&where, __meta__(object)))
     {
         // resize object
     }
@@ -99,9 +98,9 @@ static __attribute__((nonnull)) __object_internal_p __find__(const struct __obje
 #else
 #error OBJECT-FIND IS UNIMPLEMENTED
 #endif
-    const struct __object __objectp = object;
-    uint8_t hash = __hash__(__key) & (__size__(objectp) - 1);
-    uint64_t mulx8_hash = (((hash)&0xff)^0xff)) * 0x10101010101010101ull;
+    struct __object *__objectp = object;
+    uint32_t hash = __hash__(__key, strlen(__key)) & (__size__(__objectp) - 1);
+    uint64_t mulx8_hash = ((hash&0xff)^0xff) * 0x10101010101010101ull;
     uint64_t mask = 0;
     
     for (uint32_t i; (mask = __test_eq_8_precomp((uint64_t *)(__cache__(objectp))[i])); i++)
