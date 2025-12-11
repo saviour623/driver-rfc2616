@@ -83,9 +83,17 @@ static __attribute__((nonnull)) void __add__(struct __object *object, const void
     __size__(object) += 1;
 }
 
-static __attribute__((nonull)) __object_internal_p __find__(const struct __object const *object, const void *__key)
+static __attribute__((nonnull)) __object_internal_p __find__(const struct __object const *object, const void *__key)
 {
+    const struct __object __objectp = object;
+    uint8_t hash = __hash__(__key) & (__size__(objectp) - 1);
+    uint32_t mask = 0;
+
+#ifdef __AVX256__
+#elif __SSE2__
+#else
     
+#endif
 }
 static __attribute__((nonnull)) void __remove__(struct __object *object, const void *__restrict key)
 {
