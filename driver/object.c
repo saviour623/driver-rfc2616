@@ -87,27 +87,39 @@ static __attribute__((nonnull)) void __add__(struct __object *object, const void
 static __attribute__((nonnull)) __object_internal_p __find__(const struct __object const *object, const void *__key)
 {
 #ifdef __AVX256__
-#define __test_eq(v, x) _mm256_movemask_epi8(_mm256_cmpeq_epi8(_mm256_loadu_si128((const __m256i *)(v)), _mm256_set1_epi8((uint8_t)(x))))
+typedef __m256i intx8_t;
+#define RDWORD 32
+#define __broadcast_byte(x) _mm256_set1_epi8((uint8_t)(x))
+#define __test_eq(v, x, ...) _mm256_movemask_epi8(_mm256_cmpeq_epi8(_mm256_loadu_si128((const __m256i *)(v)), (X)))
 #elif __SSE2__
-#define __test_eq(v, x) _mm_movemask_epi8(_mm_cmpeq_epi8(_mm_load_si128((const __m128i *)(v)), _mm_set1_epi8((uint8_t)x)))
+typedef __m128i intx8_t;
+#define RDWORD 16
+#define __broadcast_byte(x) _mm_set1_epi8((uint8_t)(x))
+#define __test_eq(v, x, ...) _mm_movemask_epi8(_mm_cmpeq_epi8(_mm_load_si128((const __m128i *)(v)), (x)))
 #elif __BIT64__
+typedef uint64_t intx8_t;
+#define RDWORD 8
+#define __broadcast_byte(x) ((x) * 0x101010101010101ull)
 #define __test_zero_fast(v) (bool)(((v) - 0x101010101010101ull) & (~(v) & 0x8080808080808080ull))
 #define __test_zero_wi(v) ((((v) - 0x1000100010001ull) | ((v) - 0x100010001000100ull)) & (~(v) & 0x8080808080808080ull));
 #define __test_eq_8(v, x) (__test_zero_wi((v) ^ ((x) * 0x101010101010101ull)))
 #define __test_eq_8_precomp(v, px) (__test_zero_wi((v) ^ (px)))
-#define __test_eq(v, x) __test_eq_8_precomp(v, x)
+#define __test_eq(v, x, ...) __test_eq_8_precomp(((uint64_t *)(v))[0], x)
 #else
 #error OBJECT-FIND IS UNIMPLEMENTED
 #endif
     struct __object *__objectp = object;
     uint64_t hash = __hash__(__key, strlen(__key)) & (__size__(__objectp) - 1);
-    uint64_t mulx8_hash = ((hash&0xffull)^0xffull) * 0x101010101010101ull;
-    uint64_t mask = 0;
-    
-    for (uint32_t i; (mask = __test_eq_8_precomp(((uint64_t *)__cache__(__objectp))[i]), mulx8_hash); i++)
-        {
+    intx8_t mulx8_hash = __broadcast_byte(hash);
 
+    uint64_t mask = 0;
+
+    for (uint32_t i = __size__(__objectp) >> RDWORD; i--;)
+    {
+        for (uint32_t j; (mask = __test_eq(__cache__(__objectp), mulx8_hash)); j++)
+        {
         }
+    }
 }
 static __attribute__((nonnull)) void __remove__(struct __object *object, const void *__restrict key)
 {
