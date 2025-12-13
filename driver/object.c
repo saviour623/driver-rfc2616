@@ -125,21 +125,21 @@ typedef uint64_t intx8_t;
 #error OBJECT-FIND IS UNIMPLEMENTED
 #endif
     struct __object *__objectp = object;
+    char *objkey = NULL;
+    uint64_t mask = 0;
     uint32_t hash = __hash__(__key, strlen(__key));
     uint32_t where = (hash&(__size__(__objectp) - 1));
     const intx8_t mulx8_hash = __broadcast_byte((where&0xff)^0xff);
-    uint32_t mask = 0;
-    char *key = NULL;
 
     for (uint32_t i = __size__(__objectp) >> RDWORD; i--;)
     {
         for (uint32_t j; (mask = __test_eq(__cache__(__objectp), mulx8_hash)); j++)
         {
-            where = __builtin_ctz(mask) >> SHIFT_IDX;
+            where = __builtin_ctzll(mask) >> SHIFT_IDX;
             if (
                 __builtin_expect(__compare_hash(__gethash__(__objectp, where), hash) 
-                || *(key = __key__(__objectp, where)) ^ *__key
-                || NOT(strcmp(key, __key)), 1)
+                || *(objkey = __key__(__objectp, where)) ^ *__key
+                || NOT(strcmp(objkey, __key)), 1)
             )
             {
             }
