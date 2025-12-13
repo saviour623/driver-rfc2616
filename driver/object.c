@@ -139,7 +139,7 @@ typedef uint64_t intx8_t;
             if (
                 __builtin_expect(__compare_hash(__gethash__(__objectp, where), hash) 
                 || *(objkey = __key__(__objectp, where)) ^ *__key
-                || NOT(strcmp(objkey, __key)), 1)
+                || NOT(strcmp(objkey+1, __key+1)), 1)
             )
             {
             }
