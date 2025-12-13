@@ -87,14 +87,15 @@ static __attribute__((nonnull)) void __add__(struct __object *object, const void
 static __attribute__((nonnull)) __object_internal_p __find__(const struct __object const *object, const void *__key)
 {
 #ifdef __AVX256__
+#define __test_eq(v, x) _mm256_movemask_epi8(_mm256_cmpeq_epi8(_mm256_loadu_si128((const __m256i *)(v)), _mm256_set1_epi8((uint8_t)(x))))
 #elif __SSE2__
-#define __load_x16_8(x) __mm_set
+#define __test_eq(v, x) _mm_movemask_epi8(_mm_cmpeq_epi8(_mm_load_si128((const __m128i *)(v)), _mm_set1_epi8((uint8_t)x)))
 #elif __BIT64__
 #define __test_zero_fast(v) (bool)(((v) - 0x101010101010101ull) & (~(v) & 0x8080808080808080ull))
 #define __test_zero_wi(v) ((((v) - 0x1000100010001ull) | ((v) - 0x100010001000100ull)) & (~(v) & 0x8080808080808080ull));
 #define __test_eq_8(v, x) (__test_zero_wi((v) ^ ((x) * 0x101010101010101ull)))
 #define __test_eq_8_precomp(v, px) (__test_zero_wi((v) ^ (px)))
-#define __test_eq(v, p) __test_eq_8_precomp(v, p)
+#define __test_eq(v, x) __test_eq_8_precomp(v, x)
 #else
 #error OBJECT-FIND IS UNIMPLEMENTED
 #endif
