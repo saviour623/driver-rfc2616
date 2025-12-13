@@ -33,8 +33,8 @@ typedef struct
 #define __get__(objc, where)   (((__object_internal_p)(objc))[where])
 #define __value__(objc, where) (__get__(objc, where)).value
 #define __key__(objc, where)   (__get__(objc, where)).key
-#define __setcache__(objc, where)  (__cache__(objc)[where]=(((where)&0xff)^0xff))
-#define __rsetcache__(objc, where) (__cache__(objc)[where]=OBJC_NULL)
+#define __setcache__(objc, where)  (((uint8_t *)__cache__(objc))[where]=(((where)&0xff)^0xff))
+#define __rsetcache__(objc, where) (((uint8_t *)__cache__(objc))[where]=OBJ_NULL)
 
 #define CAT(_1, _2) _1 ## _2
 #define EXPAND(...) __VA_ARGS__
@@ -90,20 +90,20 @@ static __attribute__((nonnull)) __object_internal_p __find__(const struct __obje
 #elif __SSE2__
 #define __load_x16_8(x) __mm_set
 #elif __BIT64__
-#define __test_zero_fast(v) (bool)(((v) - 0x10101010101010101ull) & (~(v) & 0x8080808080808080ull))
+#define __test_zero_fast(v) (bool)(((v) - 0x101010101010101ull) & (~(v) & 0x8080808080808080ull))
 #define __test_zero_wi(v) ((((v) - 0x1000100010001ull) | ((v) - 0x100010001000100ull)) & (~(v) & 0x8080808080808080ull));
-#define __test_eq_8(v, x) (__test_zero_wi((v) ^ ((x) * 0x10101010101010101ull)))
+#define __test_eq_8(v, x) (__test_zero_wi((v) ^ ((x) * 0x101010101010101ull)))
 #define __test_eq_8_precomp(v, px) (__test_zero_wi((v) ^ (px)))
 #define __test_eq(v, p) __test_eq_8_precomp(v, p)
 #else
 #error OBJECT-FIND IS UNIMPLEMENTED
 #endif
     struct __object *__objectp = object;
-    uint32_t hash = __hash__(__key, strlen(__key)) & (__size__(__objectp) - 1);
-    uint64_t mulx8_hash = ((hash&0xff)^0xff) * 0x10101010101010101ull;
+    uint64_t hash = __hash__(__key, strlen(__key)) & (__size__(__objectp) - 1);
+    uint64_t mulx8_hash = ((hash&0xffull)^0xffull) * 0x101010101010101ull;
     uint64_t mask = 0;
     
-    for (uint32_t i; (mask = __test_eq_8_precomp((uint64_t *)(__cache__(objectp))[i])); i++)
+    for (uint32_t i; (mask = __test_eq_8_precomp(((uint64_t *)__cache__(__objectp))[i]), mulx8_hash); i++)
         {
 
         }
