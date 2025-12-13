@@ -1,5 +1,6 @@
 #include <stdint.h>
 #include <stdio.h>
+#include <string.h>
 #include <stdlib.h>
 #include <stddef.h>
 #include <immintrin.h>
@@ -16,7 +17,11 @@ struct __object
 typedef struct
 {
     void *key, *value;
+    #if INCLUDE_HASH
+        uintptr_t hash;
+    #endif
 } *__object_internal_p;
+
 
 #define NOT(e) (!(e))
 #define OBJ_NULL 0xff
@@ -35,6 +40,11 @@ typedef struct
 #define __key__(objc, where)   (__get__(objc, where)).key
 #define __setcache__(objc, where)  (((uint8_t *)__cache__(objc))[where]=(((where)&0xff)^0xff))
 #define __rsetcache__(objc, where) (((uint8_t *)__cache__(objc))[where]=OBJ_NULL)
+
+#if INCLUDE_HASH
+#define __get_hash__(objc, where) (__get__(objc, where)).hash
+#define __compare_hash(hash_1, hash_2) NOT((hash_1) ^ (hash_2))
+#endif
 
 #define CAT(_1, _2) _1 ## _2
 #define EXPAND(...) __VA_ARGS__
@@ -84,40 +94,51 @@ static __attribute__((nonnull)) void __add__(struct __object *object, const void
     __size__(object) += 1;
 }
 
-static __attribute__((nonnull)) __object_internal_p __find__(const struct __object const *object, const void *__key)
+static __attribute__((nonnull)) __object_internal_p __find__(const struct __object const *object, const char *__key)
 {
 #ifdef __AVX256__
 typedef __m256i intx8_t;
 #define RDWORD 32
+#define SHIFT_IDX 0
 #define __broadcast_byte(x) _mm256_set1_epi8((uint8_t)(x))
-#define __test_eq(v, x, ...) _mm256_movemask_epi8(_mm256_cmpeq_epi8(_mm256_loadu_si128((const __m256i *)(v)), (X)))
+#define __test_eq(v, x) _mm256_movemask_epi8(_mm256_cmpeq_epi8(_mm256_loadu_si128((const __m256i *)(v)), (X)))
 #elif __SSE2__
 typedef __m128i intx8_t;
 #define RDWORD 16
+#define SHIFT_IDX 0
 #define __broadcast_byte(x) _mm_set1_epi8((uint8_t)(x))
-#define __test_eq(v, x, ...) _mm_movemask_epi8(_mm_cmpeq_epi8(_mm_load_si128((const __m128i *)(v)), (x)))
+#define __test_eq(v, x) _mm_movemask_epi8(_mm_cmpeq_epi8(_mm_load_si128((const __m128i *)(v)), (x)))
 #elif __BIT64__
 typedef uint64_t intx8_t;
 #define RDWORD 8
+#define SHIFT_IDX 7
 #define __broadcast_byte(x) ((x) * 0x101010101010101ull)
 #define __test_zero_fast(v) (bool)(((v) - 0x101010101010101ull) & (~(v) & 0x8080808080808080ull))
 #define __test_zero_wi(v) ((((v) - 0x1000100010001ull) | ((v) - 0x100010001000100ull)) & (~(v) & 0x8080808080808080ull));
 #define __test_eq_8(v, x) (__test_zero_wi((v) ^ ((x) * 0x101010101010101ull)))
 #define __test_eq_8_precomp(v, px) (__test_zero_wi((v) ^ (px)))
-#define __test_eq(v, x, ...) __test_eq_8_precomp(((uint64_t *)(v))[0], x)
+#define __test_eq(v, x) __test_eq_8_precomp(((uint64_t *)(v))[0], x)
 #else
 #error OBJECT-FIND IS UNIMPLEMENTED
 #endif
     struct __object *__objectp = object;
-    uint64_t hash = __hash__(__key, strlen(__key)) & (__size__(__objectp) - 1);
-    intx8_t mulx8_hash = __broadcast_byte(hash);
-
-    uint64_t mask = 0;
+    uint64_t hash = __hash__(__key, strlen(__key));
+    uint32_t mask = 0, where = (hash&(__size__(__objectp) - 1));
+    intx8_t mulx8_hash = __broadcast_byte((where&0xff)^0xff);
+    char *key = NULL;
 
     for (uint32_t i = __size__(__objectp) >> RDWORD; i--;)
     {
         for (uint32_t j; (mask = __test_eq(__cache__(__objectp), mulx8_hash)); j++)
         {
+            where = __builtin_ctz(mask) >> SHIFT_IDX;
+            if (
+                __builtin_expect(__compare_hash(__gethash__(__objectp, where), hash) 
+                || *(key = __key__(__objectp, where)) ^ *__key
+                || NOT(strcmp(key, __key)), 1)
+            )
+            {
+            }
         }
     }
 }
