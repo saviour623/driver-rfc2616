@@ -97,7 +97,7 @@ static __attribute__((nonnull)) void __add__(struct __object *object, const void
     __size__(object) += 1;
 }
 
-static __attribute__((nonnull)) __object_internal_p __find__(const struct __object const *object, const char *__key)
+static __attribute__((nonnull)) void * __find__(const struct __object const *object, const char *__key)
 {
 #ifdef __AVX256__
 typedef __m256i intx8_t;
@@ -141,10 +141,10 @@ typedef uint64_t intx8_t;
                 || *(objkey = __key__(__objectp, where)) ^ *__key
                 || NOT(strcmp(objkey+1, __key+1)), 1)
             )
-            {
-            }
+                return __value__(__objectp, where);
         }
     }
+    return NULL;
 }
 static __attribute__((nonnull)) void __remove__(struct __object *object, const void *__restrict key)
 {
