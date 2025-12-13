@@ -44,6 +44,9 @@ typedef struct
 #if INCLUDE_HASH
 #define __get_hash__(objc, where) (__get__(objc, where)).hash
 #define __compare_hash(hash_1, hash_2) NOT((hash_1) ^ (hash_2))
+#else
+#define __get_hash__(...) 0
+#define __compare_hash(...) 0
 #endif
 
 #define CAT(_1, _2) _1 ## _2
@@ -122,9 +125,10 @@ typedef uint64_t intx8_t;
 #error OBJECT-FIND IS UNIMPLEMENTED
 #endif
     struct __object *__objectp = object;
-    uint64_t hash = __hash__(__key, strlen(__key));
-    uint32_t mask = 0, where = (hash&(__size__(__objectp) - 1));
-    intx8_t mulx8_hash = __broadcast_byte((where&0xff)^0xff);
+    uint32_t hash = __hash__(__key, strlen(__key));
+    uint32_t where = (hash&(__size__(__objectp) - 1));
+    const intx8_t mulx8_hash = __broadcast_byte((where&0xff)^0xff);
+    uint32_t mask = 0;
     char *key = NULL;
 
     for (uint32_t i = __size__(__objectp) >> RDWORD; i--;)
