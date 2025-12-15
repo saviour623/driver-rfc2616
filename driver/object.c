@@ -17,29 +17,30 @@ struct __object
 typedef struct
 {
     void *key, *value;
-    #if INCLUDE_HASH
-        uintptr_t hash;
-    #endif
+#if INCLUDE_HASH
+    uintptr_t hash;
+#endif
 } *__object_internal_p;
-
 
 #define NOT(e) (!(e))
 #define OBJ_NULL 0xff
+#define RET_FVALUE 1
+#define RET_FIDX 0
 #define OBJ_BLOCK (sizeof(struct __object))
 #define OBJ_FWDBLOCK (OBJ_BLOCK + ((16 * 2) + 16))
 #define __objc_setup_internal__(obj) \
-    (((obj)->__dat) = (uint8_t *)(obj)+OBJ_BLOCK), ((obj)->__cache = ((uint8_t *)(obj)+OBJ_FWDBLOCK))
+    (((obj)->__dat) = (uint8_t *)(obj) + OBJ_BLOCK), ((obj)->__cache = ((uint8_t *)(obj) + OBJ_FWDBLOCK))
 
-#define __meta__(objc)  ((objc)->__meta)
+#define __meta__(objc) ((objc)->__meta)
 #define __cache__(objc) ((objc)->__cache)
-#define __size__(objc)  ((objc)->__size)
-#define __null__(b, i)  NOT(((b)[(i) >> 6]) & ((i) & 0x3fu))
+#define __size__(objc) ((objc)->__size)
+#define __null__(b, i) NOT(((b)[(i) >> 6]) & ((i) & 0x3fu))
 
-#define __get__(objc, where)   (((__object_internal_p)(objc))[where])
+#define __get__(objc, where) (((__object_internal_p)(objc))[where])
 #define __value__(objc, where) (__get__(objc, where)).value
-#define __key__(objc, where)   (__get__(objc, where)).key
-#define __setcache__(objc, where)  (((uint8_t *)__cache__(objc))[where]=(((where)&0xff)^0xff))
-#define __rsetcache__(objc, where) (((uint8_t *)__cache__(objc))[where]=OBJ_NULL)
+#define __key__(objc, where) (__get__(objc, where)).key
+#define __setcache__(objc, where) (((uint8_t *)__cache__(objc))[where] = (((where) & 0xff) ^ 0xff))
+#define __rsetcache__(objc, where) (((uint8_t *)__cache__(objc))[where] = OBJ_NULL)
 
 #if INCLUDE_HASH
 #define __get_hash__(objc, where) (__get__(objc, where)).hash
@@ -49,18 +50,18 @@ typedef struct
 #define __compare_hash(...) 0
 #endif
 
-#define CAT(_1, _2) _1 ## _2
+#define CAT(_1, _2) _1##_2
 #define EXPAND(...) __VA_ARGS__
 
 #define __set_HASH(arg)
 #define __set_ALL()
 #define __set_CACHE()
 
-#define __set(op1, arg1, op2, arg2, op3, arg3, op4, arg4, ...)\
-    (CAT(__set_, op1)(arg1),\
-    CAT(__set_, op2)(arg2),\
-    CAT(__set_, op3)(arg3),\
-    CAT(__set_, op4)(arg4))
+#define __set(op1, arg1, op2, arg2, op3, arg3, op4, arg4, ...) \
+    (CAT(__set_, op1)(arg1),                                   \
+     CAT(__set_, op2)(arg2),                                   \
+     CAT(__set_, op3)(arg3),                                   \
+     CAT(__set_, op4)(arg4))
 
 __attribute__((noinline, warn_unused)) static struct __object *__init__(void)
 {
@@ -89,7 +90,7 @@ static __attribute__((nonnull)) void __add__(struct __object *object, const void
         // resize object
     }
 
-    __key__  (object, where) = key;
+    __key__(object, where) = key;
     __value__(object, where) = value;
 
     __setcache__(object, where);
@@ -97,24 +98,30 @@ static __attribute__((nonnull)) void __add__(struct __object *object, const void
     __size__(object) += 1;
 }
 
-static __attribute__((nonnull)) void * __find__(const struct __object const *object, const char *__key)
+static __attribute__((nonnull)) void *__find__(const struct __object const *object, const char *__key, uint8_t return_Policy)
 {
 #ifdef __AVX256__
-typedef __m256i intx8_t;
+    typedef __m256i intx8_t;
+    typedef uint32_t mask_t;
 #define RDWORD 32
 #define SHIFT_IDX 0
+#define U_ONE (mask_t)1
 #define __broadcast_byte(x) _mm256_set1_epi8((uint8_t)(x))
 #define __test_eq(v, x) _mm256_movemask_epi8(_mm256_cmpeq_epi8(_mm256_loadu_si128((const __m256i *)(v)), (X)))
 #elif __SSE2__
-typedef __m128i intx8_t;
+    typedef __m128i intx8_t;
+    typedef uint16_t mask_t;
 #define RDWORD 16
 #define SHIFT_IDX 0
+#define U_ONE (mask_t)1
 #define __broadcast_byte(x) _mm_set1_epi8((uint8_t)(x))
 #define __test_eq(v, x) _mm_movemask_epi8(_mm_cmpeq_epi8(_mm_load_si128((const __m128i *)(v)), (x)))
 #elif __BIT64__
-typedef uint64_t intx8_t;
+    typedef uint64_t intx8_t;
+    typedef intx8_t mask_t;
 #define RDWORD 8
 #define SHIFT_IDX 7
+#define U_ONE 1ull
 #define __broadcast_byte(x) ((x) * 0x101010101010101ull)
 #define __test_zero_fast(v) (bool)(((v) - 0x101010101010101ull) & (~(v) & 0x8080808080808080ull))
 #define __test_zero_wi(v) ((((v) - 0x1000100010001ull) | ((v) - 0x100010001000100ull)) & (~(v) & 0x8080808080808080ull));
@@ -126,23 +133,28 @@ typedef uint64_t intx8_t;
 #endif
     struct __object *__objectp = object;
     char *objkey = NULL;
-    uint64_t mask = 0;
     uint32_t hash = __hash__(__key, strlen(__key));
-    uint32_t where = (hash&(__size__(__objectp) - 1));
-    const intx8_t mulx8_hash = __broadcast_byte((where&0xff)^0xff);
+    uint32_t where = (hash & (__size__(__objectp) - 1));
+    mask_t mask = 0;
+    const intx8_t mulx8_hash = __broadcast_byte((where & 0xff) ^ 0xff);
+    // read cache bytes aligned to sizeof (intx8_t)
+
+    if (0)
+    {
+
+    }
+    where = 0;
 
     for (uint32_t i = __size__(__objectp) >> RDWORD; i--;)
     {
         mask = __test_eq(__cache__(__objectp), mulx8_hash);
         while (mask)
         {
-            where = __builtin_ctzll(mask) >> SHIFT_IDX;
-            if (
-                __compare_hash(__gethash__(__objectp, where), hash)
-                || (*(objkey = __key__(__objectp, where)) ^ *__key && NOT(strcmp(objkey+1, __key+1)))
-            )
-                return __value__(__objectp, where);
-            mask ^= (1ull << (SHIFT_IDX+where));
+            where = __builtin_ctzll(mask >> SHIFT_IDX);
+            mask ^= (U_ONE << where);
+            where = (where >> SHIFT_IDX) + (0);
+            if (__compare_hash(__gethash__(__objectp, where), hash) && (NOT(*(objkey = __key__(__objectp, where)) ^ *__key) && NOT(strcmp(objkey + 1, __key + 1))))
+                return where;
         }
     }
     return NULL;
@@ -151,18 +163,16 @@ static __attribute__((nonnull)) void __remove__(struct __object *object, const v
 {
     uint32_t where;
 
-    if ((where = __find__(object, key)) < 0)
-        return;
+    if ((where = __find__(object, key, RET_FIDX)) < 0)
+    {
+        // Error: No such element
+    }
     return __rsetcache__(object, where);
 }
 
-static __attribute__((nonnull)) void *__getvalue__(struct __object *object, const void *__restrict key)
+static __inline__ __attribute__((nonnull, always_inline)) void *__getvalue__(const struct __object *object, const void *__restrict __key)
 {
-    uint32_t where;
-
-    if ((where = __find__(object, key)) < 0)
-        return;
-    return __value__(object, where);
+    return __find__(object, __key, RET_FVALUE);
 }
 
 __attribute__((noinline)) static struct __object *__del__(struct __object *object)
