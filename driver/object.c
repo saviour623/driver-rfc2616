@@ -24,16 +24,18 @@ typedef struct
 {
     void *key, *value;
 #if INCLUDE_HASH
-    uintptr_t hash;
+    uint32_t hash;
 #endif
 } *__object_internal_p;
 
 #define NOT(e) (!(e))
-#define OBJ_NULL 0xff
 #define RET_FVALUE 1
 #define RET_FIDX 0
+#define PROBE_MAX (1 << 16) // number of probes before rehashing
+
 #define OBJ_BLOCK (sizeof(struct __object))
 #define OBJ_FWDBLOCK (OBJ_BLOCK + ((16 * 2) + 16))
+#define OBJ_NULL 0
 #define __objc_setup_internal__(obj) \
     (((obj)->__dat) = (uint8_t *)(obj) + OBJ_BLOCK), ((obj)->__cache = ((uint8_t *)(obj) + OBJ_FWDBLOCK))
 
@@ -87,23 +89,6 @@ static __inline__ __attribute__((always_inline, pure)) uint32_t __hash__(const v
     return 0;
 }
 
-static __attribute__((nonnull)) void __add__(struct __object *object, const void *__restrict key, const void *__restrict value)
-{
-    uint32_t where = __hash__(key, strlen(key)) & (__size__(object) - 1); // object data capacity is a maximum of 256 items
-
-    if (__null__(__meta__(object), where) && __get_unused__(&where, __meta__(object)))
-    {
-        // resize object
-    }
-
-    __key__(object, where) = key;
-    __value__(object, where) = value;
-
-    __setcache__(object, where);
-    __meta__(object)[where] &= (1u << (where & 0x3f));
-    __size__(object) += 1;
-}
-
 #if (__MINGW64__) || defined(__clang__) || defined(__GCC__)
 #define __scan_reverse(mask) __builtin_ctzll(mask)
 #elif defined(WINSYS)
@@ -118,6 +103,18 @@ extern __inline__ __forceinline unsigned long __scan_reverse(const uint64_t mask
 #endif
 #endif
 
+/*
+ * FUNC: @__cache_id__
+ * DESC: return the cache ID of @hash
+ */
+static __inline__ __attribute__((always_inline, pure)) uint8_t __cache_id__(const uintmax_t hash)
+{
+    return ((hash & 0xffffu) - ((hash & 0xffffu) * 0xff01u) >> 24) + 1; // low_16_hash % 251 (add 1 to avoid zero - clearbit)
+}
+
+/*
+ * FUNC: @__find__
+ */
 static __attribute__((nonnull)) void *__find__(const struct __object const *object, const char *__key, uint8_t return_Policy)
 {
 #ifdef __AVX256__
@@ -163,7 +160,7 @@ static __attribute__((nonnull)) void *__find__(const struct __object const *obje
     mask_t mask = 0;
     uint32_t hash = __hash__(__key, strlen(__key));
     uint32_t where = (hash & (__size__(object) - 1));
-    _Alignas(RDWORD) const intx8_t mulx8_hash = __broadcast_byte((where & 0xff) ^ 0xff);
+    _Alignas(RDWORD) const intx8_t mulx8_hash = __broadcast_byte(__cache_id__(hash));
 
     if (0)
     {
@@ -190,6 +187,40 @@ static __attribute__((nonnull)) void *__find__(const struct __object const *obje
     }
     return NULL;
 }
+
+static uint32_t __get_unused__(uint64_t *switch_ctrl, uint32_t *from)
+{
+    uint32_t __from = ROUNDDWN_MULP(*from, RDWORD_BFOR);
+
+    // TODO: finish this later
+    switch_ctrl += __from >> 8;
+
+    for (uint32_t i = 0; i < PROBE_MAX >> 8; i++)
+    {
+        if (__builtin_expect(switch_ctrl[i] ^ 0xffffffffffffffffull, 1))
+            return __scan_reverse(switch_ctrl[i]);
+    }
+
+    return __from;
+}
+
+static __attribute__((nonnull)) void __add__(struct __object *object, const void *__restrict key, const void *__restrict value)
+{
+    uint32_t where = __hash__(key, strlen(key)) & (__size__(object) - 1); // object data capacity is a maximum of 256 items
+
+    if (__null__(__meta__(object), where) && __get_unused__(__meta__(object), &where))
+    {
+        // resize object
+    }
+
+    __key__(object, where) = key;
+    __value__(object, where) = value;
+
+    __setcache__(object, where);
+    __meta__(object)[where] &= (1u << (where & 0x3f));
+    __size__(object) += 1;
+}
+
 static __attribute__((nonnull)) void __remove__(struct __object *object, const void *__restrict key)
 {
     uint32_t where;
