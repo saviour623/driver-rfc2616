@@ -5,6 +5,12 @@
 #include <stddef.h>
 #include <immintrin.h>
 
+#if defined(WIN32) || defined(_MSV_VER)
+#define WINSYS 1
+#include <windows.h>
+#include <windef.h>
+#endif
+
 struct __object
 {
     uint64_t __meta[4];
@@ -98,64 +104,89 @@ static __attribute__((nonnull)) void __add__(struct __object *object, const void
     __size__(object) += 1;
 }
 
+#if (__MINGW64__) || defined(__clang__) || defined(__GCC__)
+#define __scan_reverse(mask) __builtin_ctzll(mask)
+#elif defined(WINSYS)
+#ifdef _bit_scan_reverse
+#define __scan_reverse(mask) _bit_scan_reverse(mask)
+#else
+extern __inline__ __forceinline unsigned long __scan_reverse(const uint64_t mask)
+{
+    unsigned long idx;
+    return (_BitScanReverse64(&idx, mask), idx);
+}
+#endif
+#endif
+
 static __attribute__((nonnull)) void *__find__(const struct __object const *object, const char *__key, uint8_t return_Policy)
 {
 #ifdef __AVX256__
     typedef __m256i intx8_t;
     typedef uint32_t mask_t;
 #define RDWORD 32
+#define RDWORD_BFOR 128
 #define SHIFT_IDX 0
 #define U_ONE (mask_t)1
 #define __broadcast_byte(x) _mm256_set1_epi8((uint8_t)(x))
-#define __test_eq(v, x) _mm256_movemask_epi8(_mm256_cmpeq_epi8(_mm256_loadu_si128((const __m256i *)(v)), (X)))
+#define __testeq__(v, x) _mm256_movemask_epi8(_mm256_cmpeq_epi8(_mm256_loadu_si128((const __m256i *)(v)), (X)))
 #elif __SSE2__
     typedef __m128i intx8_t;
     typedef uint16_t mask_t;
 #define RDWORD 16
+#define RDWORD_BFOR 128
 #define SHIFT_IDX 0
 #define U_ONE (mask_t)1
 #define __broadcast_byte(x) _mm_set1_epi8((uint8_t)(x))
-#define __test_eq(v, x) _mm_movemask_epi8(_mm_cmpeq_epi8(_mm_load_si128((const __m128i *)(v)), (x)))
-#elif __BIT64__
+#define __testeq__(v, x) _mm_movemask_epi8(_mm_cmpeq_epi8(_mm_load_si128((const __m128i *)(v)), (x)))
+#elif __UINT64__
     typedef uint64_t intx8_t;
     typedef intx8_t mask_t;
 #define RDWORD 8
-#define SHIFT_IDX 7
+#define RDWORD_BFOR 64
+#define SHIFT_IDX 3
 #define U_ONE 1ull
 #define __broadcast_byte(x) ((x) * 0x101010101010101ull)
 #define __test_zero_fast(v) (bool)(((v) - 0x101010101010101ull) & (~(v) & 0x8080808080808080ull))
 #define __test_zero_wi(v) ((((v) - 0x1000100010001ull) | ((v) - 0x100010001000100ull)) & (~(v) & 0x8080808080808080ull));
 #define __test_eq_8(v, x) (__test_zero_wi((v) ^ ((x) * 0x101010101010101ull)))
 #define __test_eq_8_precomp(v, px) (__test_zero_wi((v) ^ (px)))
-#define __test_eq(v, x) __test_eq_8_precomp(((uint64_t *)(v))[0], x)
+#define __testeq__(v, x) __test_eq_8_precomp(((uint64_t *)(v))[0], x)
 #else
-#error OBJECT-FIND IS UNIMPLEMENTED
+#error UNIMPLEMENTED
 #endif
-    struct __object *__objectp = object;
+#define ROUNDDWN_MULP(n, pow_2) ((n) - ((n & (pow_2))))
+#define ROUNDUP_MULP(n, pow_2) (((n) + ((pow_2) - 1)) & ~((pow_2) - 1))
+#define __read_next_cache__(cache) ++(cache)
+
+    const intx8_t *cache = NULL;
     char *objkey = NULL;
-    uint32_t hash = __hash__(__key, strlen(__key));
-    uint32_t where = (hash & (__size__(__objectp) - 1));
     mask_t mask = 0;
-    const intx8_t mulx8_hash = __broadcast_byte((where & 0xff) ^ 0xff);
-    // read cache bytes aligned to sizeof (intx8_t)
+    uint32_t hash = __hash__(__key, strlen(__key));
+    uint32_t where = (hash & (__size__(object) - 1));
+    _Alignas(RDWORD) const intx8_t mulx8_hash = __broadcast_byte((where & 0xff) ^ 0xff);
 
     if (0)
     {
-
+        // TODO: if position already has what we are looking for, return it
+        return where;
     }
-    where = 0;
 
-    for (uint32_t i = __size__(__objectp) >> RDWORD; i--;)
+    where = ROUNDDWN_MULP(where, RDWORD_BFOR); // read cache bytes aligned to sizeof (intx8_t) and atmost 2*(sizeof (intx8_t)) before position
+    cache = __cache__(object) + where;
+
+    for (uint32_t i = (ROUNDUP_MULP(__size__(object), RDWORD) - where) >> RDWORD; i--;)
     {
-        mask = __test_eq(__cache__(__objectp), mulx8_hash);
+        mask = __testeq__(cache, mulx8_hash);
+        //__builtin_prefetch(cache + 1, 0); // offers a little improvement
         while (mask)
         {
-            where = __builtin_ctzll(mask >> SHIFT_IDX);
+            where = __scan_reverse(mask);
             mask ^= (U_ONE << where);
-            where = (where >> SHIFT_IDX) + (0);
-            if (__compare_hash(__gethash__(__objectp, where), hash) && (NOT(*(objkey = __key__(__objectp, where)) ^ *__key) && NOT(strcmp(objkey + 1, __key + 1))))
+            where = (where >> SHIFT_IDX);
+            if (__compare_hash(__gethash__(object, where), hash) && (NOT(*(objkey = __key__(object, where)) ^ *__key) && NOT(strcmp(objkey + 1, __key + 1))))
                 return where;
         }
+        __read_next_cache__(cache);
     }
     return NULL;
 }

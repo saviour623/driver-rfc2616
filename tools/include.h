@@ -37,7 +37,7 @@ You should have received a copy of the GNU General Public License along with thi
 ***********************************************************************/
 #if defined(__GNUC__) || defined(__clang__)
     #define __GNUC_LLVM__ 1
-#elif defined(_MSC_VER) || defined(_WIN32) || defined(_win32)
+#elif defined(_MSC_VER) || defined(WIN32) || defined(_win32)
     #define __WINDOWS__   1
 #else
     #define __WINDOWS__ 0
@@ -79,7 +79,7 @@ You should have received a copy of the GNU General Public License along with thi
 
 ***********************************************************************/
 
-#include "macro/macro.h"
+#include "../macro/macro.h"
 
 #define MvpgMacro_Vaopt(...)        MAC_VA_OPT__(__VA_ARGS__)
 #define MvpgMacro_Select(A, B, ...) MAC_SELECT__(A, B, __VA_ARGS__)

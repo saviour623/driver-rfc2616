@@ -3,7 +3,7 @@
 
 #if defined(WIN32) || defined(_MSC_VER) || defined(MINGW)
     #define WIN_SUPPORT
-    #incliude <winsocket.h>
+    #include <winsocket.h>
 #elif defined(__unix__) || defined(__linux__) || defined(linux)
     #define UNIX_SUPPORT
     #include <netdb.h>
