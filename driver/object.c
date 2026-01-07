@@ -14,7 +14,7 @@
 struct __object
 {
     uint64_t __meta[4];
-    void *__dat;
+    __object_internal_p __data;
     void *__cache;
     struct __object *__np;
     uint16_t __size;
@@ -37,9 +37,10 @@ typedef struct
 #define OBJ_FWDBLOCK (OBJ_BLOCK + ((16 * 2) + 16))
 #define OBJ_NULL 0
 #define __objc_setup_internal__(obj) \
-    (((obj)->__dat) = (uint8_t *)(obj) + OBJ_BLOCK), ((obj)->__cache = ((uint8_t *)(obj) + OBJ_FWDBLOCK))
+    (((obj)->__data) = (uint8_t *)(obj) + OBJ_BLOCK), ((obj)->__cache = ((uint8_t *)(obj) + OBJ_FWDBLOCK))
 
 #define __meta__(objc) ((objc)->__meta)
+#define __data__(objc) ((objc)->__data)
 #define __cache__(objc) ((objc)->__cache)
 #define __size__(objc) ((objc)->__size)
 #define __null__(b, i) NOT(((b)[(i) >> 6]) & ((i) & 0x3fu))
@@ -121,6 +122,7 @@ static __attribute__((nonnull)) void *__find__(const struct __object const *obje
     typedef __m256i intx8_t;
     typedef uint32_t mask_t;
 #define RDWORD 32
+#define RDWORD_P2 5
 #define RDWORD_BFOR 128
 #define SHIFT_IDX 0
 #define U_ONE (mask_t)1
@@ -130,6 +132,7 @@ static __attribute__((nonnull)) void *__find__(const struct __object const *obje
     typedef __m128i intx8_t;
     typedef uint16_t mask_t;
 #define RDWORD 16
+#define RDWORD_P2 4
 #define RDWORD_BFOR 128
 #define SHIFT_IDX 0
 #define U_ONE (mask_t)1
@@ -139,6 +142,7 @@ static __attribute__((nonnull)) void *__find__(const struct __object const *obje
     typedef uint64_t intx8_t;
     typedef intx8_t mask_t;
 #define RDWORD 8
+#define RDWORD_P2 3
 #define RDWORD_BFOR 64
 #define SHIFT_IDX 3
 #define U_ONE 1ull
@@ -147,16 +151,22 @@ static __attribute__((nonnull)) void *__find__(const struct __object const *obje
 #define __test_zero_wi(v) ((((v) - 0x1000100010001ull) | ((v) - 0x100010001000100ull)) & (~(v) & 0x8080808080808080ull));
 #define __test_eq_8(v, x) (__test_zero_wi((v) ^ ((x) * 0x101010101010101ull)))
 #define __test_eq_8_precomp(v, px) (__test_zero_wi((v) ^ (px)))
-#define __testeq__(v, x) __test_eq_8_precomp(((uint64_t *)(v))[0], x)
+
+    extern __inline__ __attribute__((gnu_inline, always_inline, pure)) uint64_t __testeq_fn(const uint64_t fv, const uint64_t mask)
+    {
+        return __test_eq_8_precomp(fv, mask);
+    }
+#define __testeq__(v, x) __testeq_fn(((uint64_t *)(v))[0], x)
 #else
 #error UNIMPLEMENTED
 #endif
 #define ROUNDDWN_MULP(n, pow_2) ((n) - ((n & (pow_2))))
 #define ROUNDUP_MULP(n, pow_2) (((n) + ((pow_2) - 1)) & ~((pow_2) - 1))
-#define __read_next_cache__(cache) ++(cache)
+#define __read_next_cache__(cache) (++cache)
 
     const intx8_t *cache = NULL;
-    char *objkey = NULL;
+    __object_internal_p tag = NULL;
+
     mask_t mask = 0;
     uint32_t hash = __hash__(__key, strlen(__key));
     uint32_t where = (hash & (__size__(object) - 1));
@@ -170,19 +180,21 @@ static __attribute__((nonnull)) void *__find__(const struct __object const *obje
 
     where = ROUNDDWN_MULP(where, RDWORD_BFOR); // read cache bytes aligned to sizeof (intx8_t) and atmost 2*(sizeof (intx8_t)) before position
     cache = __cache__(object) + where;
+    tag = __data__(object) + where;
 
-    for (uint32_t i = (ROUNDUP_MULP(__size__(object), RDWORD) - where) >> RDWORD; i--;)
+    __builtin_prefetch(cache + 1);
+
+    for (uint32_t i = (ROUNDUP_MULP(__size__(object), RDWORD) - where) >> RDWORD_P2; i--;)
     {
         mask = __testeq__(cache, mulx8_hash);
-        //__builtin_prefetch(cache + 1, 0); // offers a little improvement
         while (mask)
         {
             where = __scan_reverse(mask);
             mask ^= (U_ONE << where);
-            where = (where >> SHIFT_IDX);
-            if (__compare_hash(__gethash__(object, where), hash) && (NOT(*(objkey = __key__(object, where)) ^ *__key) && NOT(strcmp(objkey + 1, __key + 1))))
+            if (__compare_hash(tag[(where >> SHIFT_IDX)].hash, hash) && NOT(strcmp(tag[(where >> SHIFT_IDX)].key, __key)))
                 return where;
         }
+        tag = tag + RDWORD;
         __read_next_cache__(cache);
     }
     return NULL;
@@ -250,3 +262,14 @@ int main(void)
 
     return 0;
 }
+
+/*
+
+// // // //
+// // // //
+// // // //
+// // // //
+
+11
+
+*/
