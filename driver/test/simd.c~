@@ -1,8 +1,0 @@
-#include <stdio.h>
-#include <stdint.h>
-#include <immintrinc.h>
-
-uint16_t find(uint8_t *m16)
-{
-  //
-}

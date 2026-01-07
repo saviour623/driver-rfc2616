@@ -1,9 +1,0 @@
-1. client:
-- given port and address, just update client
-- given address, get a port using getaddrinfo
-- given address, find a free port
-
-- parse /status and /session command (parse on HTTP header, use json library to parse command)
-
-- start a session
-   

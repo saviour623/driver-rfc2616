@@ -4,7 +4,7 @@
 ## Basic Example
 ```C
 
-#include <webdriver.h>
+#include <driver-rfc2612/webdriver.h>
 #include <stdlib.h>
 
 int main(void) {
@@ -18,7 +18,7 @@ int main(void) {
         WebdriverClass element = handle->findElement(handle, By->ID, "box");
         element->sendKeys(element, "hello world");
         // or
-        sendKeys(element, "closing")->action->scroll(element, 25px, 30px);
+        sendKeys(element, "closing")->action->scroll(element, "25px", "30px");
 
         //Screenshot window 
         handle->window->action(handle, Action->screenshot); // base64
@@ -35,7 +35,7 @@ int main(void) {
         
         Webdriver_Options opt;
         WebdriverChromeOptionsAdd(opt, "experimental");
-        WebdriverChromeOptionsAdd(opt, WebdriverObject("excludeSwitches", ["--automation", "--logger"]));
+        WebdriverChromeOptionsAdd(opt, WebdriverObject("excludeSwitches", (webdriver_Array)["--automation", "--logger"]));
         
         Webdriver_Service service;
         WebdriverServiceAdd(service, Service->port, 39675);
@@ -53,6 +53,4 @@ int main(void) {
         return 0;
 }
 ```
-<br>
-
-
+<br>

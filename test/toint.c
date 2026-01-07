@@ -1,5 +1,0 @@
-#if (-0x10 >> 1) == -0x8 && ((-1 & (0x10 - 1)) == 0xf)
-#warning "greater than 0"
-#else
-#error
-#endif
